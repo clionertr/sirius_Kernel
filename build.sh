@@ -48,10 +48,20 @@ ensure_kernelsu() {
     local kernelsu_dir="${SCRIPT_DIR}/KernelSU"
     local expected_config="${kernelsu_dir}/kernel/Kconfig"
     local remote="${KERNELSU_REMOTE:-https://github.com/tiann/KernelSU.git}"
+    local version="${KERNELSU_VERSION:-v0.9.5}"
 
     if [[ -f "${expected_config}" ]]; then
-        log "KernelSU already present."
-        return
+        if [[ -d "${kernelsu_dir}/.git" ]]; then
+            local current_ref
+            current_ref="$(git -C "${kernelsu_dir}" describe --tags --exact-match 2>/dev/null || git -C "${kernelsu_dir}" rev-parse --short HEAD)"
+            if [[ "${current_ref}" == "${version}" ]]; then
+                log "KernelSU already at ${version}."
+                return
+            fi
+            log "KernelSU present but at ${current_ref}, refreshing to ${version}."
+        else
+            log "KernelSU directory exists but is not a git repo; refreshing contents."
+        fi
     fi
 
     if ! command -v git >/dev/null 2>&1; then
@@ -59,14 +69,14 @@ ensure_kernelsu() {
         exit 1
     fi
 
-    if [[ -d "${kernelsu_dir}" && -n "$(ls -A "${kernelsu_dir}" 2>/dev/null)" ]]; then
+    if [[ -d "${kernelsu_dir}" && ! -f "${expected_config}" && -n "$(ls -A "${kernelsu_dir}" 2>/dev/null)" ]]; then
         log "WARNING: KernelSU directory exists but missing kernel/Kconfig."
         log "Please ensure the contents are correct."
-    else
-        log "Fetching KernelSU from ${remote}"
-        rm -rf "${kernelsu_dir}"
-        git clone --depth=1 "${remote}" "${kernelsu_dir}"
     fi
+
+    log "Fetching KernelSU ${version} from ${remote}"
+    rm -rf "${kernelsu_dir}"
+    git clone --depth=1 --branch "${version}" "${remote}" "${kernelsu_dir}"
 
     if [[ ! -f "${expected_config}" ]]; then
         log "ERROR: Unable to locate KernelSU kernel/Kconfig after fetch."
